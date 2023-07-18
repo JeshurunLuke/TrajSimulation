@@ -189,9 +189,16 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 4,
+   "execution_count": 5,
    "metadata": {},
    "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "WARNING: replacing module BeamClass.\n"
+     ]
+    },
     {
      "data": {
       "text/plain": [
@@ -237,14 +244,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": []
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 5,
+   "execution_count": 6,
    "metadata": {},
    "outputs": [
     {
@@ -266,7 +266,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 6,
+   "execution_count": 7,
    "metadata": {},
    "outputs": [
     {
@@ -292,15 +292,13 @@
     "using ..atom_class\n",
     "using ..Consts\n",
     "\n",
-    "export MOT_Beam, get_Fnet, Tweezer, Tweezer_WF, generateAtoms, sampleVelocities_BD, Environment_T, get_Fnet_S\n",
+    "export MOT_Beam, get_Fnet, Tweezer, Tweezer_WF, generateAtoms, sampleVelocities_BD, Environment_T\n",
     "\n",
     "struct Environment_T\n",
     "    Intensity\n",
     "    B_Field\n",
     "    grid\n",
     "end\n",
-    "\n",
-    "\n",
     "\n",
     "# MOT FUNCTIONS\n",
     "struct MOT_Beam{T}\n",
@@ -314,11 +312,8 @@
     "    environment\n",
     "    dir\n",
     "end\n",
-    "\n",
     "function MOT_Beam(Atom::atomInterface, Beam::BeamProperties, environment, stateI, stateF, detuning, I, updateS0=true)\n",
     "    B_Field_func = environment.B_Field\n",
-    "\n",
-    "\n",
     "    ω0 = 2 * pi * getw0(Atom, stateI, stateF, norm(B_Field_func(0, 0, 0)))\n",
     "    BeamGaussian = GaussianBeam(Beam, I, ω0 + detuning)\n",
     "\n",
@@ -344,48 +339,23 @@
     "\n",
     "    return MOT_Beam(ω0, detuning, k_vec, Γ, Isat, BeamGaussian, s0, environment, Beam.dir)\n",
     "end\n",
-    "\n",
-    "\n",
-    "\n",
-    "function get_scatteringrate_abs(MBeam::MOT_Beam, pos, vel, detuningOffset)\n",
-    "    return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning + detuningOffset + dot(MBeam.k_vec, vel)) / MBeam.Γ)^2)\n",
+    "function get_scatteringrate_abs(MBeam::MOT_Beam, pos, vel)\n",
+    "    return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning + dot(MBeam.k_vec, vel)) / MBeam.Γ)^2)\n",
     "end\n",
-    "function get_scatteringrate(MBeam::MOT_Beam, pos, detuningOffset)\n",
-    "    return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning + detuningOffset) / MBeam.Γ)^2)\n",
+    "function get_scatteringrate(MBeam::MOT_Beam, pos)\n",
+    "    return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * MBeam.detuning / MBeam.Γ)^2)\n",
     "end\n",
-    "function get_Fabs(MBeam::MOT_Beam, pos, vel, detuningOffset)\n",
-    "    return C[\"hbar\"] * (MBeam.ω0 + MBeam.detuning) / C[\"c\"] * get_scatteringrate_abs(MBeam, pos, vel, detuningOffset) * MBeam.dir\n",
+    "function get_Fabs(MBeam::MOT_Beam, pos, vel)\n",
+    "    return C[\"hbar\"] * (MBeam.ω0 + MBeam.detuning) / C[\"c\"] * get_scatteringrate_abs(MBeam, pos, vel) * MBeam.dir\n",
     "end\n",
-    "function get_Fspon(MBeam::MOT_Beam, pos, detuningOffset)\n",
-    "    return C[\"hbar\"] * norm(MBeam.k_vec) * get_scatteringrate(MBeam, pos, detuningOffset) * getSphereVec(3)\n",
+    "function get_Fspon(MBeam::MOT_Beam, pos)\n",
+    "    return C[\"hbar\"] * norm(MBeam.k_vec) * get_scatteringrate(MBeam, pos) * getSphereVec(3)\n",
     "end\n",
-    "function get_Fnet(MBeam::MOT_Beam, pos, vel, detuningFunc::Any)\n",
-    "    detuningOffset = detuningFunc(pos...)\n",
-    "    Spont = get_Fspon(MBeam, pos, detuningOffset)\n",
-    "    Abs = get_Fabs(MBeam, pos, vel, detuningOffset)\n",
+    "function get_Fnet(MBeam::MOT_Beam, pos, vel)\n",
+    "    Spont = get_Fspon(MBeam, pos)\n",
+    "    Abs = get_Fabs(MBeam, pos, vel)\n",
     "    return Abs + Spont\n",
     "end\n",
-    "\n",
-    "get_scatteringrate_abs(MBeam::MOT_Beam, pos, vel) = get_scatteringrate_abs(MBeam::MOT_Beam, pos, vel, 0)\n",
-    "get_scatteringrate(MBeam::MOT_Beam, pos) = get_scatteringrate(MBeam::MOT_Beam, pos, 0)\n",
-    "get_Fabs(MBeam::MOT_Beam, pos, vel) = get_Fabs(MBeam::MOT_Beam, pos, vel, 0)\n",
-    "get_Fspon(MBeam::MOT_Beam, pos) = get_Fspon(MBeam::MOT_Beam, pos, 0)\n",
-    "get_Fnet(MBeam::MOT_Beam, pos, vel) = get_Fnet(MBeam::MOT_Beam, pos, vel, 0)\n",
-    "\n",
-    "\n",
-    "\n",
-    "\n",
-    "function get_Fnet(MBeam::MOT_Beam, pos, vel, detuningOffset::Number) \n",
-    "    Spont = get_Fspon(MBeam, pos, detuningOffset)\n",
-    "    Abs = get_Fabs(MBeam, pos, vel, detuningOffset)\n",
-    "    return Abs + Spont\n",
-    "end\n",
-    "\n",
-    "\n",
-    "get_Fnet_S(MBeam::MOT_Beam, pos, vel, detuningFunc::Any) = vcat(get_Fnet(MBeam, pos, vel, detuningFunc), [get_scatteringrate(MBeam, pos, detuningFunc(pos...))])\n",
-    "get_Fnet_S(MBeam::MOT_Beam, pos, vel, detuningNum::Number) = vcat(get_Fnet(MBeam, pos, vel, detuningNum), [get_scatteringrate(MBeam, pos,detuningNum)])\n",
-    "\n",
-    "\n",
     "\n",
     "abstract type AbstractTweezer end\n",
     "\n",
@@ -519,17 +489,12 @@
     "end\n",
     "\n",
     "\n",
-    "function get_Fnet(TBeam::Tweezer_WF, pos, vel, rand::Any)\n",
-    "    return TBeam.ForceInterp(pos...)\n",
-    "end\n",
-    "get_Fnet_S(TBeam::Tweezer_WF, pos, vel, rand::Any) = vcat(get_Fnet(TBeam::Tweezer_WF, pos, vel, rand::Any), [0.0])\n",
-    "\n",
     "end"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 7,
+   "execution_count": 8,
    "metadata": {},
    "outputs": [
     {
@@ -549,7 +514,7 @@
     "using ..atom_class\n",
     "using ..BeamClass\n",
     "\n",
-    "export System, set_tweezer, set_MOT, set_tweezer, join_Beams, clear_beams, set_SystemRHS, set_SystemRHS_Photons\n",
+    "export System, set_tweezer, set_MOT, set_tweezer, join_Beams, clear_beams, set_SystemRHS\n",
     "\n",
     "mutable struct System\n",
     "    AtomType\n",
@@ -592,21 +557,7 @@
     "        dy[4:6] = zeros(3)\n",
     "        for beam in Sys.BeamConfig\n",
     "            #Fnet_i = get_Fnet(beam, y[1:3], y[4:6])\n",
-    "            dy[4:6] .+= get_Fnet(beam, y[1:3], y[4:6], p[1])# Fnet_i\n",
-    "        end\n",
-    "        dy[4:6] = dy[4:6] / Sys.AtomType.atom.mass\n",
-    "    end\n",
-    "    return RHS\n",
-    "end\n",
-    "function set_SystemRHS_Photons(Sys::System)\n",
-    "    function RHS(dy, y, p, t)\n",
-    "        #pos_vec = y[1:3]\n",
-    "        #vel_vec = y[4:6]\n",
-    "        dy[1:3] = y[4:6]\n",
-    "        dy[4:end] = zeros(length(y[4:end]))\n",
-    "        for beam in Sys.BeamConfig\n",
-    "            #Fnet_i = get_Fnet(beam, y[1:3], y[4:6])\n",
-    "            dy[4:end] .+= get_Fnet_S(beam, y[1:3], y[4:6], p[1])# Fnet_i\n",
+    "            dy[4:6] .+= get_Fnet(beam, y[1:3], y[4:6])# Fnet_i\n",
     "        end\n",
     "        dy[4:6] = dy[4:6] / Sys.AtomType.atom.mass\n",
     "    end\n",
@@ -681,7 +632,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 8,
+   "execution_count": 15,
    "metadata": {},
    "outputs": [
     {
@@ -759,7 +710,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 24,
+   "execution_count": 29,
    "metadata": {},
    "outputs": [
     {
@@ -773,37 +724,28 @@
     }
    ],
    "source": [
-    "using Interpolations\n",
     "function simulate(Sys::System)\n",
-    "    RHS = set_SystemRHS_Photons(Sys)\n",
+    "    RHS = set_SystemRHS(Sys)\n",
     "\n",
     "    boundMin, boundMax = minimum(OurSystem.Environment.grid[1]), maximum(OurSystem.Environment.grid[1])\n",
-    "    conditionStop(y, t, integrator) = !any(boundMin + 1e-6 .< y[1:3]) || !any(y[1:3] .< boundMax - 1e-6)\n",
+    "    conditionStop(y, t, integrator) = !any(boundMin + 1e-6 .< y[1:3] .< boundMax - 1e-6)\n",
     "    affect!(integrator) = terminate!(integrator)\n",
     "    cb = DiscreteCallback(conditionStop, affect!)\n",
     "\n",
     "\n",
-    "    GridRegion = Sys.Environment.grid\n",
-    "    itp = interpolate(GridRegion,  Sys.Environment.Intensity[1], Gridded(Linear()))\n",
-    "    \n",
-    "    I0 = itp(0, 0, 0)\n",
     "\n",
-    "    detuning_func(x, y, z) = (itp(x, y, z)/I0 - 1)*107e6\n",
-    "\n",
-    "    p = [detuning_func] \n",
-    "    u0 = zeros(Float64, 7)\n",
-    "    u0[4] = 0.025011808599180355\n",
+    "    u0 = zeros(Float64, 6)\n",
     "    tspan = (0, 10e-3)\n",
-    "    prob = ODEProblem(RHS, u0, tspan, p)\n",
-    "    dt = 5e-9\n",
-    "    sol = solve(prob, RK4(), dt=dt, adaptive=false)#, callback=cb, abstol=1e-3, reltol=1e-3)\n",
+    "    prob = ODEProblem(RHS, u0, tspan)\n",
+    "    dt = 1e-9\n",
+    "    sol = solve(prob, Euler(), dt=dt, callback=cb)\n",
     "    return sol.t, hcat(sol.u...)\n",
     "end"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 25,
+   "execution_count": 30,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -813,41 +755,24 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 26,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "nPhotons = u[7, :];"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": 18,
+   "execution_count": 21,
    "metadata": {},
    "outputs": [
     {
      "data": {
       "text/plain": [
-       "6-element Vector{Int64}:\n",
-       " 1\n",
-       " 2\n",
-       " 3\n",
-       " 3\n",
-       " 4\n",
-       " 5"
+       "(10000002,)"
       ]
      },
      "metadata": {},
      "output_type": "display_data"
     }
    ],
-   "source": [
-    "vcat([1, 2, 3], [3, 4, 5])"
-   ]
+   "source": []
   },
   {
    "cell_type": "code",
-   "execution_count": 32,
+   "execution_count": 12,
    "metadata": {},
    "outputs": [
     {
@@ -867,11 +792,11 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 34,
+   "execution_count": 31,
    "metadata": {},
    "outputs": [],
    "source": [
-    "plt.plot(t, x*1e6)\n",
+    "plt.plot(t, x)\n",
     "plt.show()"
    ]
   },
@@ -1465,18 +1390,20 @@
     }
    ],
    "source": [
-    "  "
+    "for i in x\n",
+    "    print(i)\n",
+    "end\n"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 53,
+   "execution_count": 37,
    "metadata": {},
    "outputs": [
     {
      "data": {
       "text/plain": [
-       "(::Main.CoolTrap.var\"#ForceInterp#23\"{Tweezer{Float64}, Tuple{StepRangeLen{Float64, Base.TwicePrecision{Float64}, Base.TwicePrecision{Float64}, Int64}, StepRangeLen{Float64, Base.TwicePrecision{Float64}, Base.TwicePrecision{Float64}, Int64}, StepRangeLen{Float64, Base.TwicePrecision{Float64}, Base.TwicePrecision{Float64}, Int64}}}) (generic function with 1 method)"
+       "3"
       ]
      },
      "metadata": {},
@@ -1484,7 +1411,7 @@
     }
    ],
    "source": [
-    " a= OurSystem.TweezerConfig[1].ForceInterp"
+    "g.g(2)"
    ]
   },
   {
