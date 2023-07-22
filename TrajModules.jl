@@ -529,7 +529,7 @@ function get_Abs(Sys, pos, vel,  t, AtomInfo)
         return zeros(Float64, 3)
     else
         indRun = argmax(prob_req[indsOI])
-        println(pos, vel, get_Fnet(Sys.MOTConfig[indRun], pos, vel))
+        #println(pos, vel, get_Fnet(Sys.MOTConfig[indRun], pos, vel))
         AtomInfo.last_em = t
         AtomInfo.state = 1 
         return get_Fnet(Sys.MOTConfig[indRun], pos, vel)/ Sys.AtomType.atom.mass
@@ -547,7 +547,7 @@ function get_Spont(Sys, t, AtomInfo)
         indRun = argmax(prob_req[indsOI])
         AtomInfo.last_em = t
         AtomInfo.state = 0 
-        println(dt*1e9, get_momSpon(Sys.MOTConfig[indRun])/Sys.AtomType.atom.mass)
+        #println(dt*1e9, get_momSpon(Sys.MOTConfig[indRun])/Sys.AtomType.atom.mass)
         return get_momSpon(Sys.MOTConfig[indRun])
     end
 end
@@ -558,17 +558,18 @@ function set_SystemRHS_MC(Sys::System) #Handles absorption and spontaneous emiss
         AtomNum, AtomInfo = p[2], p[3]
         for atom in 1:AtomNum
             dy[1*atom:3*atom] = y[4*atom:6*atom]
-            if AtomInfo[atom].state == 0
+            if AtomInfo[atom].state == 0 || AtomInfo[atom].state == 1
                 dy[4*atom:6*atom] = get_Abs(Sys, y[1*atom:3*atom], y[4*atom:6*atom],t, AtomInfo[atom])# Fnet_i
-                println(get_Abs(Sys, y[1*atom:3*atom], y[4*atom:6*atom],t, AtomInfo[atom]))
+                #println(y[1*atom:3*atom], y[4*atom:6*atom], dy[4*atom:6*atom]*Sys.AtomType.atom.mass)
+                #println(get_Abs(Sys, y[1*atom:3*atom], y[4*atom:6*atom],t, AtomInfo[atom]))
             else
                 y[4*atom:6*atom] .+=   get_Spont(Sys, t, AtomInfo[atom])/Sys.AtomType.atom.mass#get_Spont(Sys, y[1*atom:3*atom], y[4*atom:6*atom], p[1])# Fnet_i
             end
 
             for beam in Sys.TweezerConfig
-                y[4*atom:6*atom] .+= get_Fnet(beam, y[1*atom:3*atom], y[4*atom:6*atom])
+                dy[4*atom:6*atom] .+= get_Fnet(beam, y[1*atom:3*atom], y[4*atom:6*atom])/Sys.AtomType.atom.mass
             end
-            dy[4*atom:6*atom] = dy[4*atom:6*atom] / Sys.AtomType.atom.mass
+            dy[4*atom:6*atom] = dy[4*atom:6*atom] 
         end
         
     end
