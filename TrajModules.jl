@@ -558,7 +558,7 @@ function set_SystemRHS_MC(Sys::System) #Handles absorption and spontaneous emiss
         AtomNum, AtomInfo = p[2], p[3]
         for atom in 1:AtomNum
             dy[1*atom:3*atom] = y[4*atom:6*atom]
-            if AtomInfo[atom].state == 0 || AtomInfo[atom].state == 1
+            if AtomInfo[atom].state == 0
                 dy[4*atom:6*atom] = get_Abs(Sys, y[1*atom:3*atom], y[4*atom:6*atom],t, AtomInfo[atom])# Fnet_i
                 #println(y[1*atom:3*atom], y[4*atom:6*atom], dy[4*atom:6*atom]*Sys.AtomType.atom.mass)
                 #println(get_Abs(Sys, y[1*atom:3*atom], y[4*atom:6*atom],t, AtomInfo[atom]))
