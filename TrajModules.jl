@@ -1,4 +1,8 @@
+
+
 #Consts 
+
+
 module Consts
 export C
 const C = Dict("c" => 2.99798458E8, "hbar" => 1.054571E-34, "kb" => 1.3806452E-23, "e0" => 8.85418E-12, "q_c" => 1.60217663e-19, "m_e" => 9.11e-31)
@@ -128,6 +132,14 @@ end
 
 ###
 module CoolTrap
+
+const c_s = 2.99798458E8
+const ħ = 1.054571E-34
+const kb = 1.3806452E-23
+const ϵ0 =  8.85418E-12
+const q_c = 1.60217663e-19
+const m_e = 9.11e-31
+
 using ..BeamClass
 using ..utils
 using Interpolations
@@ -137,9 +149,8 @@ using Statistics: mean, std
 using Distributions
 
 using ..atom_class
-using ..Consts
 
-export MOT_Beam, get_Fnet, Tweezer, Tweezer_WF, generateAtoms, sampleVelocities_BD, Environment_T, get_Fnet_S, get_scatteringrate, get_scatteringrate_abs, get_momSpon
+export MOT_Beam, get_Fnet, Tweezer, Tweezer_WF, generateAtoms, sampleVelocities_BD, Environment_T, get_Fnet_S, get_scatteringrate, get_scatteringrate_abs, get_momSpon, get_momAbs
 
 struct Environment_T
     Intensity
@@ -169,7 +180,7 @@ function MOT_Beam(Atom::atomInterface, Beam::BeamProperties, environment, stateI
     ω0 = 2 * pi * getw0(Atom, stateI, stateF, norm(B_Field_func(0, 0, 0)))
     BeamGaussian = GaussianBeam(Beam, I, ω0 + detuning)
 
-    wavelength = C["c"] / (ω0 / (2 * pi))
+    wavelength = c_s / (ω0 / (2 * pi))
     k_vec = 2 * pi / wavelength * Beam.dir
     Γ = getTransitionRate(Atom, stateI, stateF)
     Γ_spont = 1/getLifetime(Atom, stateF)
@@ -202,11 +213,15 @@ function get_scatteringrate(MBeam::MOT_Beam, pos, detuningOffset)
     return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning + detuningOffset) / MBeam.Γ)^2)
 end
 function get_Fabs(MBeam::MOT_Beam, pos, vel, detuningOffset)
-    return C["hbar"] * (MBeam.ω0 + MBeam.detuning) / C["c"] * get_scatteringrate_abs(MBeam, pos, vel, detuningOffset) * MBeam.dir
+    return ħ * (MBeam.ω0 + MBeam.detuning) / c_s* get_scatteringrate_abs(MBeam, pos, vel, detuningOffset) * MBeam.dir
 end
 function get_momSpon(MBeam::MOT_Beam)
-    return C["hbar"] * norm(MBeam.k_vec) * getSphereVec(3)
+    return ħ * norm(MBeam.k_vec) * getSphereVec(3)
 end
+function get_momAbs(MBeam::MOT_Beam)
+    return ħ * norm(MBeam.k_vec) * MBeam.dir
+end
+
 
 function get_Fnet(MBeam::MOT_Beam, pos, vel, detuningFunc::Any)
     detuningOffset = detuningFunc(pos...)
@@ -301,11 +316,11 @@ function Tweezer(Atom::atomInterface, Beam::BeamProperties, stateI, stateF, wave
     U0 = 1 / 4 * mass * waist^2 * trapR^2
     Damping_rate = Atom.atom.getTransitionRate(stateI..., stateF...)
     wavelength_transition = abs(Atom.atom.getTransitionWavelength(stateI..., stateF...))
-    ω0 = C["c"] / wavelength_transition
-    ω = C["c"] / wavelength_tweezer
+    ω0 = c_s / wavelength_transition
+    ω = c_s / wavelength_tweezer
 
-    α = 6 * pi * C["e0"] * C["c"]^3 * (Damping_rate / ω0^2) / (ω0^2 - ω^2 - 1im * (ω^3 / ω0^2) * Damping_rate)
-    I0 = U0 * 2 * C["e0"] * C["c"] / real(α)
+    α = 6 * pi * ϵ0 * c_s^3 * (Damping_rate / ω0^2) / (ω0^2 - ω^2 - 1im * (ω^3 / ω0^2) * Damping_rate)
+    I0 = U0 * 2 * ϵ0 * c_s / real(α)
 
     Beam = BeamProperties(Beam.Loc, Beam.dir, Beam.pol, waist, zr)
     BeamGaussian = GaussianBeam(Beam, I0, ω)
@@ -324,11 +339,11 @@ function Tweezer(Atom::atomInterface, Beam::BeamProperties, stateI, stateF, wave
     U0 = 1 / 4 * mass * BeamProperties.waist^2 * trapR^2
     Damping_rate = Atom.atom.getTransitionRate(stateI..., stateF...)
     wavelength_transition = abs(Atom.atom.getTransitionWavelength(stateI..., stateF...))
-    ω0 = C["c"] / wavelength_transition
-    ω = C["c"] / wavelength_tweezer
+    ω0 = c_s / wavelength_transition
+    ω = c_s / wavelength_tweezer
 
-    α = 6 * pi * C["e0"] * C["c"]^3 * (Damping_rate / ω0^2) / (ω0^2 - ω^2 - 1im * (ω^3 / ω0^2) * Damping_rate)
-    I0 = U0 * 2 * C["e0"] * C["c"] / real(α)
+    α = 6 * pi * ϵ0 * c_s^3 * (Damping_rate / ω0^2) / (ω0^2 - ω^2 - 1im * (ω^3 / ω0^2) * Damping_rate)
+    I0 = U0 * 2 * ϵ0 * c_s/ real(α)
 
     Beam = BeamProperties(Beam.Loc, Beam.dir, Beam.pol, waist, zr)
     BeamGaussian = GaussianBeam(Beam, I0, ω)
@@ -348,15 +363,15 @@ function Tweezer_WF(BeamT::Tweezer, env::Environment_T, dl=1e-11)
     Ix = extrapolate(interpolate(grid, Ix, Gridded(Linear())), 0)
     Iy = extrapolate(interpolate(grid, Iy, Gridded(Linear())), 0)
     Iz = extrapolate(interpolate(grid, Iz, Gridded(Linear())), 0)
-    ForceInterp(x, y, z) = 1 / (2 * C["e0"] * C["c"]*step(grid[1]))* real(BeamT.α) * [Ix[x, y, z], Iy[x, y, z], Iz[x, y, z]]
+    ForceInterp(x, y, z) = 1 / (2 * ϵ0 * c_s*step(grid[1]))* real(BeamT.α) * [Ix[x, y, z], Iy[x, y, z], Iz[x, y, z]]
     return Tweezer_WF(BeamT.trapR, BeamT.trapZ, BeamT.Beam, BeamT.mass, ForceInterp, BeamT.α)
 end
 
 function generateAtoms(TBeam::T, Temp, atomNum) where {T<:AbstractTweezer}
     coordList = []
 
-    sigmaR = 1 / TBeam.trapR * sqrt(C["kb"] * Temp / TBeam.mass)
-    sigmaZ = 1 / TBeam.trapZ * sqrt(C["kb"] * Temp / TBeam.mass)
+    sigmaR = 1 / TBeam.trapR * sqrt(kb * Temp / TBeam.mass)
+    sigmaZ = 1 / TBeam.trapZ * sqrt(kb * Temp / TBeam.mass)
     coordZ = rand(Normal(0, sigmaZ), atomNum)
     coordR = rand(Normal(0, sigmaR), atomNum)
     Beam_Dir = TBeam.Beam.beamStruct.dir
@@ -377,7 +392,7 @@ end
 
 
 function sampleVelocities_BD(TBeam::T, Temp, atomNum) where {T<:AbstractTweezer} #check 
-    scale = sqrt(C["kb"] * Temp / TBeam.mass)
+    scale = sqrt(kb * Temp / TBeam.mass)
     vx, vy, vz = randn(atomNum) * scale, randn(atomNum) * scale, randn(atomNum) * scale
     velList = []
     for i in 1:atomNum
@@ -401,13 +416,18 @@ get_Fnet_S(TBeam::Tweezer_WF, pos, vel, rand::Any) = vcat(get_Fnet(TBeam::Tweeze
 end
 ###
 module SystemSetup
+const c_s = 2.99798458E8
+const ħ = 1.054571E-34
+const kb = 1.3806452E-23
+const ϵ0 =  8.85418E-12
+const q_c = 1.60217663e-19
+const m_e = 9.11e-31
 
 using ..CoolTrap
 using ..atom_class
 using ..BeamClass
-
-export System, set_tweezer, set_MOT, set_tweezer, join_Beams, clear_beams, set_SystemRHS, set_SystemRHS_SE, InitializeProblem, set_SystemRHS_MC
-
+export System, set_tweezer, set_MOT, set_tweezer, join_Beams, clear_beams, set_SystemRHS, set_SystemRHS_SE, InitializeProblem, set_SystemRHS_MC, threadCount
+using StaticArrays
 mutable struct System
     AtomType
     TweezerConfig
@@ -429,6 +449,9 @@ function problemTypes(Sys::System)
     return ["Fabs_A", "Fabs_spont_R", "Fspont_R"]
 end
 
+function threadCount(Sys::System)
+    return Threads.nthreads()
+end
 
 function InitializeProblem(Sys::System, atomNum,temp, problemType = "Fabs_A"; opt_args=nothing, default_tweezer = 1)
     if length(Sys.TweezerConfig) == 0
@@ -506,11 +529,11 @@ end
 function set_SystemRHS_SE(Sys::System)  #Handles absorption in a time averaged manner : Spontaneous Emission randomly 
     function RHS(dy, y, p, t)
         AtomNum, AtomInfo = p[end-1], p[end]
-        for atom in 1:AtomNum
+        @inbounds for atom in 1:AtomNum
             offset::Int64 = 6*(atom-1)
             dy[(1 + offset):(3+ offset)] = y[(4 + offset):(6 + offset)]
             dy[(4 + offset):(6 + offset)] = zeros(Float64, 3)
-            for beam in Sys.BeamConfig
+            @inbounds @fastmath for beam in Sys.BeamConfig
                 dy[(4 + offset):(6 + offset)]  .+= get_Fnet(beam, y[(1 + offset):(3+ offset)], y[(4 + offset):(6 + offset)], p[1]) / Sys.AtomType.atom.mass# Fnet_i
             end
             #spontMom = get_Spont(Sys, y[(1 + offset):(3+ offset)], t, AtomInfo[atom]);
@@ -532,7 +555,7 @@ function get_Abs(Sys, pos, vel,  t, AtomInfo)
         #println(pos, vel, get_Fnet(Sys.MOTConfig[indRun], pos, vel))
         AtomInfo.last_em = t
         AtomInfo.state = 1 
-        return get_Fnet(Sys.MOTConfig[indRun], pos, vel)/ Sys.AtomType.atom.mass
+        return get_Fnet(Sys.MOTConfig[indRun], pos, vel)/ Sys.AtomType.atom.mass # get_momAbs(Sys.MOTConfig[indRun])
     end
 end
 
@@ -554,24 +577,28 @@ end
 
 
 function set_SystemRHS_MC(Sys::System) #Handles absorption and spontaneous emission in an MC fashion
+    invMass = 1/Sys.AtomType.atom.mass
     function RHS(dy, y, p, t)
+        @inbounds begin
         AtomNum, AtomInfo = p[2], p[3]
-        for atom in 1:AtomNum
-            dy[1*atom:3*atom] = y[4*atom:6*atom]
-            if AtomInfo[atom].state == 0
-                dy[4*atom:6*atom] = get_Abs(Sys, y[1*atom:3*atom], y[4*atom:6*atom],t, AtomInfo[atom])# Fnet_i
+        
+        @simd for atom in 1:AtomNum
+            offset = 6*(atom-1) 
+            dy[(1 + offset):(3 + offset)] = y[(4 + offset):(6 + offset)]
+            if AtomInfo[atom].state == 0 #|| AtomInfo[atom].state == 1
+                dy[(4 + offset):(6 + offset)] = get_Abs(Sys, y[(1 + offset):(3 + offset)], y[(4 + offset):(6 + offset)],t, AtomInfo[atom])# Fnet_i
                 #println(y[1*atom:3*atom], y[4*atom:6*atom], dy[4*atom:6*atom]*Sys.AtomType.atom.mass)
                 #println(get_Abs(Sys, y[1*atom:3*atom], y[4*atom:6*atom],t, AtomInfo[atom]))
             else
-                y[4*atom:6*atom] .+=   get_Spont(Sys, t, AtomInfo[atom])/Sys.AtomType.atom.mass#get_Spont(Sys, y[1*atom:3*atom], y[4*atom:6*atom], p[1])# Fnet_i
+                y[(4 + offset):(6 + offset)] .+=   get_Spont(Sys, t, AtomInfo[atom])*invMass#/Sys.AtomType.atom.mass#get_Spont(Sys, y[1*atom:3*atom], y[4*atom:6*atom], p[1])# Fnet_i
             end
 
             for beam in Sys.TweezerConfig
-                dy[4*atom:6*atom] .+= get_Fnet(beam, y[1*atom:3*atom], y[4*atom:6*atom])/Sys.AtomType.atom.mass
+                dy[(4 + offset):(6 + offset)] .+= get_Fnet(beam, y[(1 + offset):(3 + offset)], y[(4 + offset):(6 + offset)])*invMass#/Sys.AtomType.atom.mass
             end
-            dy[4*atom:6*atom] = dy[4*atom:6*atom] 
+            #dy[(4 + offset):(6 + offset)] = dy[(4 + offset):(6 + offset)] 
         end
-        
+    end
     end
     return RHS
 end
