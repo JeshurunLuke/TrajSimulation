@@ -219,6 +219,7 @@ function get_momSpon(MBeam::MOT_Beam)
     return ħ * norm(MBeam.k_vec) * getSphereVec(3)
 end
 function get_momAbs(MBeam::MOT_Beam)
+    #println(MBeam.dir)
     return ħ * norm(MBeam.k_vec) * MBeam.dir
 end
 
@@ -428,6 +429,9 @@ using ..atom_class
 using ..BeamClass
 export System, set_tweezer, set_MOT, set_tweezer, join_Beams, clear_beams, set_SystemRHS, set_SystemRHS_SE, InitializeProblem, set_SystemRHS_MC, threadCount
 using StaticArrays
+using StatsBase
+using Random
+using LinearAlgebra 
 mutable struct System
     AtomType
     TweezerConfig
@@ -533,7 +537,7 @@ function set_SystemRHS_SE(Sys::System)  #Handles absorption in a time averaged m
             offset::Int64 = 6*(atom-1)
             dy[(1 + offset):(3+ offset)] = y[(4 + offset):(6 + offset)]
             dy[(4 + offset):(6 + offset)] = zeros(Float64, 3)
-            @inbounds @fastmath for beam in Sys.BeamConfig
+            for beam in Sys.BeamConfig
                 dy[(4 + offset):(6 + offset)]  .+= get_Fnet(beam, y[(1 + offset):(3+ offset)], y[(4 + offset):(6 + offset)], p[1]) / Sys.AtomType.atom.mass# Fnet_i
             end
             #spontMom = get_Spont(Sys, y[(1 + offset):(3+ offset)], t, AtomInfo[atom]);
@@ -551,11 +555,14 @@ function get_Abs(Sys, pos, vel,  t, AtomInfo)
     if length(indsOI) == 0 
         return zeros(Float64, 3)
     else
-        indRun = argmax(prob_req[indsOI])
+        #indRun = argmax(prob_req[indsOI])
+        indRun = sample(1:length(prob_req), Weights(prob_req./sum(prob_req)))
+
         #println(pos, vel, get_Fnet(Sys.MOTConfig[indRun], pos, vel))
         AtomInfo.last_em = t
         AtomInfo.state = 1 
-        return get_Fnet(Sys.MOTConfig[indRun], pos, vel)/ Sys.AtomType.atom.mass # get_momAbs(Sys.MOTConfig[indRun])
+        #println(indRun, " ", dt*1e9, get_momAbs(Sys.MOTConfig[indRun])/Sys.AtomType.atom.mass)
+        return get_momAbs(Sys.MOTConfig[indRun])#get_Fnet(Sys.MOTConfig[indRun], pos, vel)/ Sys.AtomType.atom.mass # get_momAbs(Sys.MOTConfig[indRun])
     end
 end
 
@@ -568,9 +575,11 @@ function get_Spont(Sys, t, AtomInfo)
         return zeros(Float64, 3)
     else
         indRun = argmax(prob_req[indsOI])
+        #indRun = sample(1:length(prob_req), Weights(prob_req./sum(prob_req)))
+        #println(indRun)
         AtomInfo.last_em = t
         AtomInfo.state = 0 
-        #println(dt*1e9, get_momSpon(Sys.MOTConfig[indRun])/Sys.AtomType.atom.mass)
+        #println(dt*1e9, norm(get_momSpon(Sys.MOTConfig[indRun])/Sys.AtomType.atom.mass))
         return get_momSpon(Sys.MOTConfig[indRun])
     end
 end
@@ -579,26 +588,27 @@ end
 function set_SystemRHS_MC(Sys::System) #Handles absorption and spontaneous emission in an MC fashion
     invMass = 1/Sys.AtomType.atom.mass
     function RHS(dy, y, p, t)
-        @inbounds begin
         AtomNum, AtomInfo = p[2], p[3]
-        
-        @simd for atom in 1:AtomNum
+        for atom in 1:AtomNum
             offset = 6*(atom-1) 
             dy[(1 + offset):(3 + offset)] = y[(4 + offset):(6 + offset)]
+            dy[(4 + offset):(6 + offset)] = zeros(Float64, 3)
+
             if AtomInfo[atom].state == 0 #|| AtomInfo[atom].state == 1
-                dy[(4 + offset):(6 + offset)] = get_Abs(Sys, y[(1 + offset):(3 + offset)], y[(4 + offset):(6 + offset)],t, AtomInfo[atom])# Fnet_i
+                #dy[(4 + offset):(6 + offset)] = get_Abs(Sys, y[(1 + offset):(3 + offset)], y[(4 + offset):(6 + offset)],t, AtomInfo[atom])# Fnet_i
+                y[(4 + offset):(6 + offset)] .+=  get_Abs(Sys, y[(1 + offset):(3 + offset)], y[(4 + offset):(6 + offset)],t, AtomInfo[atom])*invMass## Momentum approach
+
                 #println(y[1*atom:3*atom], y[4*atom:6*atom], dy[4*atom:6*atom]*Sys.AtomType.atom.mass)
                 #println(get_Abs(Sys, y[1*atom:3*atom], y[4*atom:6*atom],t, AtomInfo[atom]))
             else
                 y[(4 + offset):(6 + offset)] .+=   get_Spont(Sys, t, AtomInfo[atom])*invMass#/Sys.AtomType.atom.mass#get_Spont(Sys, y[1*atom:3*atom], y[4*atom:6*atom], p[1])# Fnet_i
-            end
-
-            for beam in Sys.TweezerConfig
-                dy[(4 + offset):(6 + offset)] .+= get_Fnet(beam, y[(1 + offset):(3 + offset)], y[(4 + offset):(6 + offset)])*invMass#/Sys.AtomType.atom.mass
+            #end
+            for beam in Sys.BeamConfig
+                dy[(4 + offset):(6 + offset)]  .+= get_Fnet(beam, y[(1 + offset):(3+ offset)], y[(4 + offset):(6 + offset)], p[1]) / Sys.AtomType.atom.mass# Fnet_i
             end
             #dy[(4 + offset):(6 + offset)] = dy[(4 + offset):(6 + offset)] 
         end
-    end
+        
     end
     return RHS
 end
