@@ -259,9 +259,11 @@ end
 
 
 
-function get_scatteringrate_abs(Atom::atomInterface,  vel, Beam::BeamProperties, stateI, stateF, detuning, I)
+function get_scatteringrate_abs(Atom::atomInterface, vel, Beam::BeamProperties, stateI, stateF, detuning, I; B_f = 0)
     Γ = getTransitionRate(Atom, stateI, stateF)
     Isat = getSaturationIntensity(Atom, stateI, stateF)
+    ω0 = 2 * pi * getw0(Atom, stateI, stateF, B_f)
+
     wavelength = c_s / (ω0 / (2 * pi))
     k_vec = 2 * pi / wavelength * Beam.dir
     s0 = I/Isat
