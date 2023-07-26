@@ -440,6 +440,7 @@ end
 
 
 Tweezer(Atom::atomInterface, Beam::BeamProperties, stateI, stateF, wavelength_tweezer, trapR::Number, trapZ::Number) =  Tweezer(Atom::atomInterface, Beam::BeamProperties, stateI, stateF, wavelength_tweezer, trapR, trapZ, α =  get_groundStatePolarizability(Atom, stateI, stateF, wavelength_tweezer))
+
 Tweezer(Atom::atomInterface, Beam::BeamProperties, stateI, stateF, wavelength_tweezer::Number, trapDepth::Number) = Tweezer(Atom::atomInterface, Beam::BeamProperties, stateI, stateF, wavelength_tweezer, trapDepth, α = get_groundStatePolarizability(Atom, stateI, stateF, wavelength_tweezer))
 
 
@@ -660,6 +661,7 @@ function set_tweezer(Sys::System, Beam::BeamProperties, stateI, stateF, waveleng
    push!(Sys.TweezerConfig, TweezerA)
    #push!(Sys.BeamConfig, TweezerA)
 end
+#=
 function set_tweezer(Sys::System, Beam::BeamProperties, stateI, stateF, wavelength_tweezer, trapDepth)
     gridbounds = Sys.Environment.grid[1]
     spacing = gridbounds[2] - gridbounds[1]
@@ -686,7 +688,7 @@ function set_tweezer(Sys::System, Beam::BeamProperties, stateI, stateF, waveleng
     push!(Sys.TweezerConfig, TweezerA)
 end
 
-
+=#
 
 function set_MOT(Sys::System, Beam::BeamProperties, stateI, stateF, detuning, I, update=true)
    MOT_i = MOT_Beam(Sys.AtomType, Beam, Sys.Environment, stateI, stateF, detuning, I, update)

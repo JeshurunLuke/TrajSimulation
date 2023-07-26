@@ -1,5 +1,6 @@
 ### IOFFE + QUADRAPOLE 
 
+module quadrapole
 
 const u0 = pi*4E-7
 const amu = 1.66E-27
@@ -15,7 +16,9 @@ const itom = 0.0254
 const J2Ghz = 1.5092E+24 
 const BtoU = 0.7
 
-
+export BfieldMag, Bnorm
+using SpecialFunctions
+using LinearAlgebra
 abstract type AbstractField end
 
 mutable struct BfieldMag <: AbstractField
@@ -65,9 +68,9 @@ function Bnorm(B::BfieldMag, x,y,z)
     Bqz, Bqy, Bqx, Biz, Biy, Bix = 0, 0 , 0, 0, 0, 0
     m = 0 
     for n in -Int((B.TurnsQ-1)/2):Int(((B.TurnsQ-1)/2))
-        Bqz +=  bqz(B,n, m, dq0(B), coord) - bqz(B,n, m, -dq0(B), coord)
-        Bqy +=  bqy(B,n, m, dq0(B), coord) - bqy(B,n, m, -dq0(B), coord)
-        Bqx +=  bqx(B,n, m, dq0(B), coord) - bqx(B,n, m, -dq0(B), coord)
+        Bqz +=  bqz(B,n, m, B.dq0, coord) - bqz(B,n, m, - B.dq0, coord)
+        Bqy +=  bqy(B,n, m,  B.dq0, coord) - bqy(B,n, m, - B.dq0, coord)
+        Bqx +=  bqx(B,n, m,  B.dq0, coord) - bqx(B,n, m, - B.dq0, coord)
     end
     if B.Ii0 != 0
         for n in -Int((B.Iturns-1)/2):Int((B.Iturns-1)/2)
@@ -129,3 +132,5 @@ function biz(B::BfieldMag,n, m, dq, coord)
     kqi = kqI(B,radial, Radius, Zdist)
     return u0*B.Ii0/(2*π*((Radius+radial)^2+Zdist^2)^(1/2)) *(ellipk(kqi^2) + (Radius^2-radial^2-Zdist^2)/((Radius-radial)^2+Zdist^2)*ellipe(kqi^2))
 end
+
+end 
