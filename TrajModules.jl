@@ -653,6 +653,25 @@ function set_tweezer(Sys::System, Beam::BeamProperties, stateI, stateF, waveleng
    push!(Sys.TweezerConfig, TweezerA)
    #push!(Sys.BeamConfig, TweezerA)
 end
+
+function set_tweezer(Sys::System, Beam::BeamProperties, stateI, stateF, wavelength_tweezer, trapR, trapZ; α)
+    gridbounds = Sys.Environment.grid[1]
+    spacing = gridbounds[2] - gridbounds[1]
+    TweezerP = Tweezer(Sys.AtomType, Beam, stateI, stateF, wavelength_tweezer, trapR, trapZ; α =  α)
+    TweezerA = Tweezer_WF(TweezerP, Sys.Environment, spacing)
+    push!(Sys.TweezerConfig, TweezerA)
+    #push!(Sys.BeamConfig, TweezerA)
+ end
+function set_tweezer(Sys::System, Beam::BeamProperties, stateI, stateF, wavelength_tweezer, trapDepth; α)
+    gridbounds = Sys.Environment.grid[1]
+    spacing = gridbounds[2] - gridbounds[1]
+    TweezerP = Tweezer(Sys.AtomType, Beam, stateI, stateF, wavelength_tweezer, trapDepth; α = α)
+    TweezerA = Tweezer_WF(TweezerP, Sys.Environment, spacing)
+    push!(Sys.TweezerConfig, TweezerA)
+end
+
+
+
 function set_MOT(Sys::System, Beam::BeamProperties, stateI, stateF, detuning, I, update=true)
    MOT_i = MOT_Beam(Sys.AtomType, Beam, Sys.Environment, stateI, stateF, detuning, I, update)
    push!(Sys.MOTConfig, MOT_i)
