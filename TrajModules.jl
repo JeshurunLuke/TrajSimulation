@@ -427,7 +427,7 @@ const m_e = 9.11e-31
 using ..CoolTrap
 using ..atom_class
 using ..BeamClass
-export System, set_tweezer, set_MOT, set_tweezer, join_Beams, clear_beams, set_SystemRHS, set_SystemRHS_SE, InitializeProblem, set_SystemRHS_MC, threadCount
+export System, set_tweezer, set_MOT, set_tweezer, join_beams, clear_beams, set_SystemRHS, set_SystemRHS_SE, InitializeProblem, set_SystemRHS_MC, threadCount, clear_beams, clear_MOT, clear_Tweezer
 using StaticArrays
 using StatsBase
 using Random
@@ -471,23 +471,23 @@ function InitializeProblem(Sys::System, atomNum,temp, problemType = "Fabs_A"; op
 
     if problemType == "Fabs_spont_R"
         for i in 1:atomNum
-            push!(u0, vcat(atomPos[i]..., vel[i]...))
+            push!(u0, vcat(atomPos[i]..., vel[i]..., 0))
             push!(atomInitialize, atomInfo(0, 0.0))            
         end
         param = (param..., atomInitialize)
-        RHS = set_SystemRHS_MC(Sys)
+        RHS = set_SystemRHS_MC(Sys, Int(length(u0)/atomNum))
     elseif problemType == "Fabs_A"
         for i in 1:atomNum 
-            push!(u0, vcat(atomPos[i]..., vel[i]...))
+            push!(u0, vcat(atomPos[i]..., vel[i]..., 0))
         end
-        RHS = set_SystemRHS(Sys)
+        RHS = set_SystemRHS(Sys, Int(length(u0)/atomNum))
     elseif problemType == "Fspont_R"
         for i in 1:atomNum 
-            push!(u0, vcat(atomPos[i]..., vel[i]...))
+            push!(u0, vcat(atomPos[i]..., vel[i]..., 0))
             push!(atomInitialize, atomInfo(0, 0.0))            
         end
         param = (param..., atomInitialize)
-        RHS = set_SystemRHS_SE(Sys)
+        RHS = set_SystemRHS_SE(Sys, Int(length(u0)/atomNum))
     end
     return vcat(u0...), param, RHS
 end
@@ -499,27 +499,36 @@ function set_tweezer(Sys::System, Beam::BeamProperties, stateI, stateF, waveleng
     TweezerP = Tweezer(Sys.AtomType, Beam, stateI, stateF, wavelength_tweezer, trapR, trapZ)
     TweezerA = Tweezer_WF(TweezerP, Sys.Environment, spacing )
     push!(Sys.TweezerConfig, TweezerA)
-    push!(Sys.BeamConfig, TweezerA)
+    #push!(Sys.BeamConfig, TweezerA)
 end
 function set_MOT(Sys::System, Beam::BeamProperties, stateI, stateF, detuning, I, update=true)
     MOT_i = MOT_Beam(Sys.AtomType, Beam, Sys.Environment, stateI, stateF, detuning, I, update)
     push!(Sys.MOTConfig, MOT_i)
-    push!(Sys.BeamConfig, MOT_i)
+    #push!(Sys.BeamConfig, MOT_i)
 end
 
+function clear_Tweezer(Sys::System)
+    Sys.TweezerConfig = []
+end
+function clear_MOT(Sys::System)
+    Sys.MOTConfig = []
+end
 
 function clear_beams(Sys::System)
-    System.TweezerConfig = []
-    System.MOTConfig = []
-    System.BeamConfig = []
+    Sys.BeamConfig = []
 end
 
-function set_SystemRHS(Sys::System) #Handles absorption in a time averaged manner : NO SPONTANEOUS EMISSION
+function join_beams(Sys::System)
+    Sys.BeamConfig = hcat(Sys.MOTConfig..., Sys.TweezerConfig...)
+end
+
+
+function set_SystemRHS(Sys::System, elemNum) #Handles absorption in a time averaged manner : NO SPONTANEOUS EMISSION
     function RHS(dy, y, p, t)
         AtomNum = p[2]
         
         for atom in 1:AtomNum
-            offset::Int64 = 6*(atom-1)
+            offset::Int64 = elemNum*(atom-1)
             dy[(4 + offset):(6 + offset)] = zeros(Float64, 3)
             for beam in Sys.BeamConfig
                 dy[(4 + offset):(6 + offset)]  .+= get_Fnet(beam, y[(1 + offset):(3+ offset)], y[(4 + offset):(6 + offset)], p[1]) / Sys.AtomType.atom.mass# Fnet_i
@@ -530,11 +539,11 @@ function set_SystemRHS(Sys::System) #Handles absorption in a time averaged manne
     end
     return RHS
 end
-function set_SystemRHS_SE(Sys::System)  #Handles absorption in a time averaged manner : Spontaneous Emission randomly 
+function set_SystemRHS_SE(Sys::System, elemNum)  #Handles absorption in a time averaged manner : Spontaneous Emission randomly 
     function RHS(dy, y, p, t)
         AtomNum, AtomInfo = p[end-1], p[end]
         @inbounds for atom in 1:AtomNum
-            offset::Int64 = 6*(atom-1)
+            offset::Int64 = elemNum*(atom-1)
             dy[(1 + offset):(3+ offset)] = y[(4 + offset):(6 + offset)]
             dy[(4 + offset):(6 + offset)] = zeros(Float64, 3)
             for beam in Sys.BeamConfig
@@ -585,12 +594,12 @@ function get_Spont(Sys, t, AtomInfo)
 end
 
 
-function set_SystemRHS_MC(Sys::System) #Handles absorption and spontaneous emission in an MC fashion
+function set_SystemRHS_MC(Sys::System, elemNum) #Handles absorption and spontaneous emission in an MC fashion
     invMass = 1/Sys.AtomType.atom.mass
     function RHS(dy, y, p, t)
         AtomNum, AtomInfo = p[2], p[3]
         for atom in 1:AtomNum
-            offset = 6*(atom-1) 
+            offset = elemNum*(atom-1) 
             dy[(1 + offset):(3 + offset)] = y[(4 + offset):(6 + offset)]
             dy[(4 + offset):(6 + offset)] = zeros(Float64, 3)
 
@@ -612,4 +621,53 @@ function set_SystemRHS_MC(Sys::System) #Handles absorption and spontaneous emiss
     end
     return RHS
 end
+end
+end
+module IntegrateODE
+
+
+using ..CoolTrap
+using Base.Threads
+using ..atom_class
+using ..BeamClass
+using ..SystemSetup
+using StaticArrays
+using StatsBase
+using Random
+using LinearAlgebra 
+using DifferentialEquations
+
+export simulate, integrate, processData
+function simulate(Sys::System, atomNum, temperature, IntegratorType, tspan, dt)
+    solutions = Vector{Any}(undef, atomNum)  # preallocate solutions array
+    @threads for i in 1:atomNum
+        u0, param, RHS = InitializeProblem(Sys, 1, temperature, IntegratorType, opt_args=0.0)
+        sol = integrate(Sys, u0, param, RHS, tspan, dt)
+        solutions[i] = sol  # assign solution to specific index
+    end
+    return solutions
+end
+
+function integrate(Sys, u0, param, RHS, tspan, dt)
+    boundMin, boundMax = minimum(Sys.Environment.grid[1]), maximum(Sys.Environment.grid[1])
+    conditionStop(y, t, integrator) = !any(boundMin + 1e-6 .< y[1:3]) || !any(y[1:3] .< boundMax - 1e-6)
+    affect!(integrator) = terminate!(integrator)
+    cb = DiscreteCallback(conditionStop, affect!)
+
+    prob = ODEProblem(RHS, u0, tspan, param)
+    sol = solve(prob, RK4(), dt=dt, adaptive=false, callback = cb)#, callback=cb, abstol=1e-3, reltol=1e-3)
+    return [sol.t, sol.u]
+end
+
+function processData(solutions)
+    timeEval = solutions[1][1]
+    x, y, z, vx, vy, vz, photons = [], [], [], [], [], [], []
+    for index in eachindex(solutions)
+        u = hcat(solutions[index][2]...)
+        push!(x, u[1, :]); push!(y, u[2, :]); push!(z, u[3, :]); push!(vx, u[4, :]);  push!(vy, u[5, :]); push!(vz, u[6, :]); push!(photons, cumsum(u[7, :]))
+    end
+    return timeEval, x, y, z, vx, vy, vz, photons
+end
+
+
 end
