@@ -225,8 +225,6 @@ function MOT_Beam(Atom::atomInterface, Beam::BeamProperties, environment, stateI
    B_Field_func = environment.B_Field
 
 
-
-
    ω0 = 2 * pi * getw0(Atom, stateI, stateF, norm(B_Field_func(0, 0, 0)))
    BeamGaussian = GaussianBeam(Beam, I, ω0 + detuning)
 
@@ -653,6 +651,15 @@ function set_tweezer(Sys::System, Beam::BeamProperties, stateI, stateF, waveleng
    push!(Sys.TweezerConfig, TweezerA)
    #push!(Sys.BeamConfig, TweezerA)
 end
+function set_tweezer(Sys::System, Beam::BeamProperties, stateI, stateF, wavelength_tweezer, trapDepth)
+    gridbounds = Sys.Environment.grid[1]
+    spacing = gridbounds[2] - gridbounds[1]
+    TweezerP = Tweezer(Sys.AtomType, Beam, stateI, stateF, wavelength_tweezer, trapDepth)
+    TweezerA = Tweezer_WF(TweezerP, Sys.Environment, spacing)
+    push!(Sys.TweezerConfig, TweezerA)
+end
+
+
 
 function set_tweezer(Sys::System, Beam::BeamProperties, stateI, stateF, wavelength_tweezer, trapR, trapZ; α)
     gridbounds = Sys.Environment.grid[1]
