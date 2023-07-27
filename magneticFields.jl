@@ -64,6 +64,10 @@ function getVari(B::BfieldMag, x,y,z,n,m,dq)
 end
 
 function Bnorm(B::BfieldMag, x,y,z)
+    if B.Ii0 == 0 && x == 0 && y == 0 && z == 0 
+        return [0 ,0, 0]
+    end
+
     coord = [x,y,z]
     Bqz, Bqy, Bqx, Biz, Biy, Bix = 0, 0 , 0, 0, 0, 0
     m = 0 
@@ -84,7 +88,17 @@ function Bnorm(B::BfieldMag, x,y,z)
     Biy = sign(y-B.dely)*Biy
     Biz = sign(z)*Biz
     B, Bqx, Bqy, Bqz, Bix, Biy, Biz = sqrt((Bqz+Biz)^2+(Bqy+Biy)^2+(Bqx+Bix)^2), Bqx, Bqy, Bqz, Bix, Biy, Biz
-    return B
+    if x == 0 
+        Bqx = 0
+    end
+    if y == 0 
+        Bqy = 0 
+    end
+    if z == 0 
+        Bqz = 0 
+    end
+
+    return [Bqx + Bix, Bqy + Biy, Bqz + Biz]
 end
 
 function Energy(B::BfieldMag, x,y,z)
@@ -116,14 +130,14 @@ function bix(B::BfieldMag,n, m, dq, coord)
     x,y,z = coord
     radial, Radius, Zdist = getVari(B, x, y, z, n, m, dq)
     kqi = kqI(B,radial, Radius, Zdist)
-    return u0*B.Ii0*Zdist/(2*π*radial*((Radius+radial)^2+Zdist^2)^(1/2)) *(-ellipk(kqi^2) + (Radius^2+radial^2+Zdist^2)/((Radius-radial)^2+Zdist^2)*ellipe(kqi^2))*cos(atan((y-dely(B))/z))
+    return u0*B.Ii0*Zdist/(2*π*radial*((Radius+radial)^2+Zdist^2)^(1/2)) *(-ellipk(kqi^2) + (Radius^2+radial^2+Zdist^2)/((Radius-radial)^2+Zdist^2)*ellipe(kqi^2))*cos(atan((y-B.dely)/z))
 end
 
 function biy(B::BfieldMag, n, m, dq, coord)
     x,y,z = coord
     radial, Radius, Zdist = getVari(B, x, y, z, n, m, dq)
     kqi = kqI(B,radial, Radius, Zdist)
-    return u0*B.Ii0*Zdist/(2*π*radial*((Radius+radial)^2+Zdist^2)^(1/2)) *(-ellipk(kqi^2) + (Radius^2+radial^2+Zdist^2)/((Radius-radial)^2+Zdist^2)*ellipe(kqi^2))*sin(atan((y-dely(B))/z))
+    return u0*B.Ii0*Zdist/(2*π*radial*((Radius+radial)^2+Zdist^2)^(1/2)) *(-ellipk(kqi^2) + (Radius^2+radial^2+Zdist^2)/((Radius-radial)^2+Zdist^2)*ellipe(kqi^2))*sin(atan((y-B.dely)/z))
 end
 
 function biz(B::BfieldMag,n, m, dq, coord)

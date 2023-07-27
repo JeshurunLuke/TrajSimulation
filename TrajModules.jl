@@ -8,7 +8,7 @@
 
 
 module Consts
-export C
+export C, Conv
 const C = Dict("c" => 2.99798458E8, "hbar" => 1.054571E-34, "kb" => 1.3806452E-23, "e0" => 8.85418E-12, "q_c" => 1.60217663e-19, "m_e" => 9.11e-31)
 end
 module atom_class
@@ -179,6 +179,7 @@ const kb = 1.3806452E-23
 const ϵ0 =  8.85418E-12
 const q_c = 1.60217663e-19
 const m_e = 9.11e-31
+const μB = 1.39962449361e10
 
 
 using ..BeamClass
@@ -208,12 +209,12 @@ end
 
 # MOT FUNCTIONS
 struct MOT_Beam{T}
-   ω0::T
+   ω0
    detuning::T
-   k_vec::Vector{T}
-   Γ::T
+   k_vec
+   Γ
    Γ_spont #  SE::SpontEmission
-   Isat::T
+   Isat
    Beam::GaussianBeam
    s0
    environment
@@ -221,7 +222,7 @@ struct MOT_Beam{T}
 end
 
 
-function MOT_Beam(Atom::atomInterface, Beam::BeamProperties, environment, stateI, stateF, detuning, I, updateS0=true)
+function MOT_Beam(Atom::atomInterface, Beam::BeamProperties, environment, stateI, stateF, detuning, I, updateS0=true; detuningFunc = true)
    B_Field_func = environment.B_Field
 
 
@@ -236,8 +237,41 @@ function MOT_Beam(Atom::atomInterface, Beam::BeamProperties, environment, stateI
    Isat = getSaturationIntensity(Atom, stateI, stateF)
    q = stateF[end] - stateI[end]
 
-
-   rot_mat(pos) = rotation_matrix(cross(B_Field_func(pos...), Beam.dir), get_angle(B_Field_func(pos...), Beam.dir))
+   #Ask Christian about this
+   if detuningFunc
+      detuning_T(x, y, z) = detuning #+ sign(x)*μB*norm(B_Field_func(x, 0, 0))/ħ + sign(y)*μB*norm(B_Field_func(0, y, 0))/ħ + sign(z)*μB*norm(B_Field_func(0, 0, z))/ħ 
+   else
+      detuning_T = detuning
+   end
+   function rot_mat(pos)
+      b_field = B_Field_func(pos...)
+   
+      beam_dir = Beam.dir
+   
+      # Compute cross_product and its norm once
+      cross_product = cross(b_field, beam_dir)
+      cross_product_norm = norm(cross_product)
+   
+      # If cross_product is almost zero, vectors are parallel or antiparallel
+      if cross_product_norm < 1e-6
+          dot_product = dot(b_field, beam_dir)
+          # If dot_product is negative, vectors are antiparallel
+          if dot_product < 0
+              # Rotate by 180 degrees about any axis that is not parallel to beam_dir
+              axis = if isapprox(abs.(beam_dir), [1, 0, 0], atol=1e-6)
+                  cross(beam_dir, [0, 1, 0])
+              else
+                  cross(beam_dir, [1, 0, 0])
+              end
+              return rotation_matrix(axis, π)
+          else
+              return Matrix(I, 3, 3)
+          end
+      end
+   
+      angle = get_angle(b_field, beam_dir)
+      return rotation_matrix(cross_product, angle)
+   end   
    rotated_pol(pos) = rot_mat(pos) * Beam.pol
    decomposed_pol(pos) = decompose_spherical(rotated_pol(pos))
    s0 = pos -> 0
@@ -247,15 +281,22 @@ function MOT_Beam(Atom::atomInterface, Beam::BeamProperties, environment, stateI
        println("Fixing")
        setpoint = get_Intensity(BeamGaussian, [0.0, 0.0, 0.0]) / Isat * abs(decomposed_pol([0.0, 0.0, 0.0])[q >= 0 ? q + 1 : end + 1 + q])^2 / norm(decomposed_pol([0.0, 0.0, 0.0]))^2
        s0 = pos -> setpoint
+   elseif updateS0 == "Interpolate" #Check Functionality
+      println("Interpolating")
+      grid = environment.grid
+      s0_func = pos -> get_Intensity(BeamGaussian, pos) / Isat * abs(decomposed_pol(pos)[q >= 0 ? q + 1 : end + 1 + q])^2 / norm(decomposed_pol(pos))^2
+      PointGrid = ([i for i in Iterators.product(grid...)])
+      s0_array = [s0_func([PointGrid[i, j, k]...]) for i in 1:size(PointGrid, 1), j in 1:size(PointGrid, 2), k in 1:size(PointGrid, 3)]
+      s0_int = interpolate(grid, s0_array, Gridded(Linear()))
+      s0 = pos -> s0_int[pos...]
    else
        println("Dynamic")
        s0 = pos -> get_Intensity(BeamGaussian, pos) / Isat * abs(decomposed_pol(pos)[q >= 0 ? q + 1 : end + 1 + q])^2 / norm(decomposed_pol(pos))^2
    end
 
 
-   return MOT_Beam(ω0, detuning, k_vec, Γ, Γ_spont,  Isat, BeamGaussian, s0, environment, Beam.dir)
+   return MOT_Beam(ω0, detuning_T, k_vec, Γ, Γ_spont,  Isat, BeamGaussian, s0, environment, Beam.dir)
 end
-
 
 
 
@@ -270,11 +311,24 @@ function get_scatteringrate_abs(Atom::atomInterface, vel, Beam::BeamProperties, 
     return s0 * Γ / 2 * 1 / (1 + s0 + (2 * (detuning + dot(k_vec, vel)) / Γ)^2)
  end
 
-function get_scatteringrate_abs(MBeam::MOT_Beam, pos, vel, detuningOffset)
+function get_scatteringrate_abs(MBeam::MOT_Beam{T}, pos, vel, detuningOffset) where {T <: Number}
+   println( MBeam.s0(pos))
+ 
    return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning + detuningOffset + dot(MBeam.k_vec, vel)) / MBeam.Γ)^2)
 end
-function get_scatteringrate(MBeam::MOT_Beam, pos, detuningOffset)
+function get_scatteringrate(MBeam::MOT_Beam{T}, pos, detuningOffset) where {T <: Number}
+   println( MBeam.s0(pos))
+
    return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning + detuningOffset) / MBeam.Γ)^2)
+end
+function get_scatteringrate_abs(MBeam::MOT_Beam{T}, pos, vel, detuningOffset) where {T <: Function}
+   println( MBeam.s0(pos))
+
+   return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning(pos...) + detuningOffset + dot(MBeam.k_vec, vel)) / MBeam.Γ)^2)
+end
+function get_scatteringrate(MBeam::MOT_Beam{T}, pos, detuningOffset) where {T <: Function}
+   println( MBeam.s0(pos))
+   return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning(pos...) + detuningOffset) / MBeam.Γ)^2)
 end
 function get_Fabs(MBeam::MOT_Beam, pos, vel, detuningOffset)
    return ħ * (MBeam.ω0 + MBeam.detuning) / c_s* get_scatteringrate_abs(MBeam, pos, vel, detuningOffset) * MBeam.dir
@@ -283,7 +337,6 @@ function get_momSpon(MBeam::MOT_Beam)
    return ħ * norm(MBeam.k_vec) * getSphereVec(3)
 end
 function get_momAbs(MBeam::MOT_Beam)
-   #println(MBeam.dir)
    return ħ * norm(MBeam.k_vec) * MBeam.dir
 end
 
@@ -573,14 +626,17 @@ const ħ = 1.054571E-34
 const kb = 1.3806452E-23
 const ϵ0 =  8.85418E-12
 const q_c = 1.60217663e-19
+const μB = 9.2740100783e-24
 const m_e = 9.11e-31
-
+	
 
 using ..CoolTrap
 using ..atom_class
 using ..BeamClass
 export System, set_tweezer, set_MOT, set_tweezer, join_Beams, clear_beams, set_SystemRHS, set_SystemRHS_SE, InitializeProblem, set_SystemRHS_MC, threadCount, clear_beams, clear_Tweezer, clear_MOT, join_beams
 using StaticArrays
+using Statistics: mean, std
+using Distributions
 using StatsBase
 using Random
 using LinearAlgebra
@@ -613,15 +669,42 @@ function threadCount(Sys::System)
    return Threads.nthreads()
 end
 
-
-function InitializeProblem(Sys::System, atomNum,temp, problemType = "Fabs_A"; opt_args=nothing, default_tweezer = 1)
-   if length(Sys.TweezerConfig) == 0
-       return "Failed: No TweezerP"
+function sampleVelocities_BD(Sys::System, Temp, atomNum)
+   scale = sqrt(kb * Temp / Sys.AtomType.atom.mass)
+   vx, vy, vz = randn(atomNum) * scale, randn(atomNum) * scale, randn(atomNum) * scale
+   velList = []
+   for i in 1:atomNum
+       push!(velList, [vx[i], vy[i], vz[i]])
    end
-   TBeam = Sys.TweezerConfig[default_tweezer]
-   atomPos = generateAtoms(TBeam, temp, atomNum)
-   vel = sampleVelocities_BD(TBeam, temp, atomNum)
-  
+   return velList
+end
+function generateAtom(Sys::System, temp, atomNum)
+   EnergyDOE = (1/2)*temp*kb
+   step = Base.step(Sys.Environment.grid[1])*10
+   B_Field_int = Sys.Environment.B_Field #Missing a factor or 2 *pi?
+   center = [1e-6, 1e-6, 1e-6]
+   dEdx = abs((norm(B_Field_int(step, 0, 0)) - norm(B_Field_int(center...)))/step*μB)
+   dEdy = abs(norm(B_Field_int(0, step, 0)) - norm(B_Field_int(center...)))/step*μB
+   dEdz = abs(norm(B_Field_int(0, 0, step)) - norm(B_Field_int(center...)))/step*μB
+   coordX = rand(Uniform(-EnergyDOE/dEdx, EnergyDOE/dEdx), atomNum)
+   coordY = rand(Uniform(-EnergyDOE/dEdy, EnergyDOE/dEdy), atomNum)
+   println(-EnergyDOE/dEdz, EnergyDOE/dEdz)
+   coordZ = rand(Uniform(-EnergyDOE/dEdz, EnergyDOE/dEdz), atomNum)
+   coordList = []
+   for i in 1:atomNum
+       push!(coordList, [coordX[i], coordY[i], coordZ[i]])
+   end
+   return coordList
+end
+function InitializeProblem(Sys::System, atomNum,temp, problemType = "Fabs_A"; opt_args=nothing, default_tweezer = 1)
+   if length(Sys.TweezerConfig) == 0 
+      atomPos = generateAtom(Sys, temp, atomNum)
+      vel = sampleVelocities_BD(Sys, temp, atomNum)
+   else
+      TBeam = Sys.TweezerConfig[default_tweezer]
+      atomPos = generateAtoms(TBeam, temp, atomNum)
+      vel = sampleVelocities_BD(TBeam, temp, atomNum)
+   end
    u0 = []
    param = (opt_args, atomNum)
    atomInitialize = []
