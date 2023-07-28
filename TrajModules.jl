@@ -239,10 +239,11 @@ function MOT_Beam(Atom::atomInterface, Beam::BeamProperties, environment, stateI
 
    #Ask Christian about this
    if detuningFunc
-      detuning_T(x, y, z) = detuning #+ sign(x)*μB*norm(B_Field_func(x, 0, 0))/ħ + sign(y)*μB*norm(B_Field_func(0, y, 0))/ħ + sign(z)*μB*norm(B_Field_func(0, 0, z))/ħ 
+      detuning_T(x, y, z) = detuning  - μB*norm(B_Field_func(x, y, z))/ħ#+ sign(x)*μB*norm(B_Field_func(x, 0, 0))/ħ + sign(y)*μB*norm(B_Field_func(0, y, 0))/ħ + sign(z)*μB*norm(B_Field_func(0, 0, z))/ħ 
    else
       detuning_T = detuning
    end
+   
    function rot_mat(pos)
       b_field = B_Field_func(pos...)
    
@@ -265,13 +266,15 @@ function MOT_Beam(Atom::atomInterface, Beam::BeamProperties, environment, stateI
               end
               return rotation_matrix(axis, π)
           else
-              return Matrix(I, 3, 3)
+              return  rotation_matrix([1, 0, 0], 0)
           end
       end
    
       angle = get_angle(b_field, beam_dir)
       return rotation_matrix(cross_product, angle)
    end   
+
+#   rot_mat(pos) =rotation_matrix( cross(B_Field_func(pos...), Beam.dir),π)
    rotated_pol(pos) = rot_mat(pos) * Beam.pol
    decomposed_pol(pos) = decompose_spherical(rotated_pol(pos))
    s0 = pos -> 0
@@ -312,23 +315,20 @@ function get_scatteringrate_abs(Atom::atomInterface, vel, Beam::BeamProperties, 
  end
 
 function get_scatteringrate_abs(MBeam::MOT_Beam{T}, pos, vel, detuningOffset) where {T <: Number}
-   println( MBeam.s0(pos))
- 
-   return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning + detuningOffset + dot(MBeam.k_vec, vel)) / MBeam.Γ)^2)
+   s0 = MBeam.s0(pos)
+   return s0 * MBeam.Γ / 2 * 1 / (1 + s0 + (2 * (MBeam.detuning + detuningOffset + dot(MBeam.k_vec, vel)) / MBeam.Γ)^2)
 end
 function get_scatteringrate(MBeam::MOT_Beam{T}, pos, detuningOffset) where {T <: Number}
-   println( MBeam.s0(pos))
-
-   return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning + detuningOffset) / MBeam.Γ)^2)
+   s0 = MBeam.s0(pos)
+   return s0 * MBeam.Γ / 2 * 1 / (1 + s0 + (2 * (MBeam.detuning + detuningOffset) / MBeam.Γ)^2)
 end
 function get_scatteringrate_abs(MBeam::MOT_Beam{T}, pos, vel, detuningOffset) where {T <: Function}
-   println( MBeam.s0(pos))
-
-   return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning(pos...) + detuningOffset + dot(MBeam.k_vec, vel)) / MBeam.Γ)^2)
+   s0 = MBeam.s0(pos)
+   return s0 * MBeam.Γ / 2 * 1 / (1 + s0 + (2 * (MBeam.detuning(pos...) + detuningOffset + dot(MBeam.k_vec, vel)) / MBeam.Γ)^2)
 end
 function get_scatteringrate(MBeam::MOT_Beam{T}, pos, detuningOffset) where {T <: Function}
-   println( MBeam.s0(pos))
-   return MBeam.s0(pos) * MBeam.Γ / 2 * 1 / (1 + MBeam.s0(pos) + (2 * (MBeam.detuning(pos...) + detuningOffset) / MBeam.Γ)^2)
+   s0 = MBeam.s0(pos)
+   return s0 * MBeam.Γ / 2 * 1 / (1 + s0 + (2 * (MBeam.detuning(pos...) + detuningOffset) / MBeam.Γ)^2)
 end
 function get_Fabs(MBeam::MOT_Beam, pos, vel, detuningOffset)
    return ħ * (MBeam.ω0 + MBeam.detuning) / c_s* get_scatteringrate_abs(MBeam, pos, vel, detuningOffset) * MBeam.dir
@@ -947,7 +947,7 @@ function integrate(Sys, u0, param, RHS, tspan, dt)
 end
 
 
-function processData(solutions)
+function reshapeData(solutions)
    timeEval = solutions[1][1]
    x, y, z, vx, vy, vz, photons = [], [], [], [], [], [], []
    for index in eachindex(solutions)
@@ -955,6 +955,12 @@ function processData(solutions)
        push!(x, u[1, :]); push!(y, u[2, :]); push!(z, u[3, :]); push!(vx, u[4, :]);  push!(vy, u[5, :]); push!(vz, u[6, :]); push!(photons, cumsum(u[7, :]))
    end
    return timeEval, x, y, z, vx, vy, vz, photons
+end
+
+function findTemperature(Sys, vx, vy, vz)
+   mass = Sys.AtomType.atom.mass
+   Temperature =  1/2*mass*(vx.^2  .+ vy.^2 + vz.^2)/kb*1e6 
+   return Temperature
 end
 
 
